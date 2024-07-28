@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "wbs-chatbot"
+version = "0.1.0"
+description = ""
+authors = ["mangarovska <ana.mangarovska@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+qdrant-client = "^1.10.1"
+pandas = "^2.2.2"
+pydantic = "^2.8.2"
+pydentic = "^0.0.1.dev3"
+python-dotenv = "^1.0.1"
+langchain = "^0.2.11"
+openai = "^1.37.1"
+langchain-community = "^0.2.10"
+langchain-openai = "^0.1.17"
+streamlit = "^1.37.0"
+flask = "^3.0.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
