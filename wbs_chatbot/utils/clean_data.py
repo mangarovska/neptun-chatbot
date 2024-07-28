@@ -18,8 +18,8 @@ def load_data() -> DataFrame | None:
         df['Price'] = df['Price'].astype(str)
         df['Happy Price'] = df['Happy Price'].astype(str)
 
-        print("Before conversion:")
-        print(df[['Price', 'Happy Price']].head(40))
+        # print("Before conversion:")
+        # print(df[['Price', 'Happy Price']].head(40))
 
         df['Price'] = df['Price'].str.replace('.0', '', regex=False)
         df['Happy Price'] = df['Happy Price'].str.replace('.0', '', regex=False)
@@ -27,8 +27,8 @@ def load_data() -> DataFrame | None:
         df['Price'] = df['Price'].str.replace('.', '', regex=False)
         df['Happy Price'] = df['Happy Price'].str.replace('.', '', regex=False)
 
-        print("After conversion:")
-        print(df[['Price', 'Happy Price']].head(40))
+        # print("After conversion:")
+        # print(df[['Price', 'Happy Price']].head(40))
 
         df.to_csv(cleaned_data_path, index=False)
         return df
