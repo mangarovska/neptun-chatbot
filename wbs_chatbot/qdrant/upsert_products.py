@@ -7,6 +7,9 @@ from langchain_openai import OpenAIEmbeddings
 from tqdm import tqdm
 from wbs_chatbot.templates.upser_product_template import upsert_product_template
 
+load_dotenv()
+cleaned_data_path = os.getenv("CLEANED_DATA_PATH")
+
 
 def csv_to_df(file_path: str) -> pd.DataFrame:
     return pd.read_csv(file_path)
@@ -27,10 +30,7 @@ def df_to_products(df: pd.DataFrame) -> list:
     return products
 
 
-def upsert_products(
-        file_path: str = r"C:\Users\ana_m\OneDrive\Desktop\wbs-neptun-chatbot\wbs_chatbot\data\cleaned_data.csv"
-) -> None:
-    load_dotenv()
+def upsert_products(file_path: str = cleaned_data_path) -> None:
     openai_api_key = os.getenv("OPENAI_API_KEY")
 
     if not openai_api_key:
@@ -47,4 +47,3 @@ def upsert_products(
 
 
 upsert_products()
-

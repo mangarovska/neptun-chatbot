@@ -34,7 +34,7 @@ class ProductRecommender:
 
 if __name__ == "__main__":
     recommender = ProductRecommender()
-    query = "Сакам 27 инчен монитор за гејмање и да е Самсунг."
-    recommended_products = recommender.recommend_products(query, "neptun-products")
-    for product in recommended_products:
-        print(product)
+    # query = "Сакам 27 инчен монитор за гејмање и да е Самсунг."
+    # recommended_products = recommender.recommend_products(query, "neptun-products")
+    # for product in recommended_products:
+    #     print(product)
