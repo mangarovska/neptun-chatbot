@@ -23,6 +23,7 @@ def upsert_record(vector: List[float], product: Product):
             models.PointStruct(
                 id=unique_id,
                 payload={
+                    "name": product.name,
                     "category": product.category,
                     "price": product.price,
                     "happy_price": product.happy_price,

@@ -1,5 +1,4 @@
 from typing import List
-
 import pandas as pd
 from wbs_chatbot.qdrant.qdrant import Product, upsert_record
 import os
