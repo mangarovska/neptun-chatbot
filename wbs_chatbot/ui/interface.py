@@ -66,7 +66,7 @@ def main():
 
         # get recommended products
         try:
-            recommended_products = recommender.recommend_products(prompt, "neptun-products", 5)
+            recommended_products = recommender.recommend_products(prompt, "neptun-products")
             formatted_response = "<br>".join(recommended_products) if recommended_products else "No products found."
         except Exception as e:
             formatted_response = f"An error occurred: {e}"

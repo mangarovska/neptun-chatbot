@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from qdrant_client import QdrantClient
 from langchain.globals import set_verbose
+
 set_verbose(True)
 
 
@@ -22,7 +23,7 @@ class ProductRecommender:
         self.chat_model = ChatOpenAI(model="gpt-4o", openai_api_key=self.openai_api_key)
         self.embedding_model = OpenAIEmbeddings(api_key=self.openai_api_key, model="text-embedding-3-small")
 
-    def recommend_products(self, query: str, collection_name: str, limit: int = 10):
+    def recommend_products(self, query: str, collection_name: str, limit: int = 5):
         query_vector = self.embedding_model.embed_query(query)
         points = self.client.search(
             collection_name=collection_name,
