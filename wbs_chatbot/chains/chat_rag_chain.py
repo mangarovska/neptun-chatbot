@@ -51,13 +51,14 @@ class ProductRecommender:
             for point in points
         ]
 
-        # Print initial recommended products
         print("\nInitial Recommended Products:")
         for idx, (name, specs, price) in enumerate(products, start=1):
-            print(f"{idx}. Name: {name}\n   Specs: {specs}    \nPrice: {price}")
+            print(f"{idx}. Name: {name}\n   Specs: {specs}\n   Price: {price}")
 
         product_texts = "\n".join(
-            [f"{i + 1}. Name: {name}\n   Specs: {specs}    \nPrice: {price}" for i, (name, specs, price) in enumerate(products)])
+            [f"{i + 1}. Name: {name}\n   Specs: {specs}\n   Price: {price}" for i, (name, specs, price) in
+             enumerate(products)])
+
         rerank_prompt = (
             f"Given the query: \"{query}\", rerank the following products by relevance:\n\n"
             f"{product_texts}\n\n"
