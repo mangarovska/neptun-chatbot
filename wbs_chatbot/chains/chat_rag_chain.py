@@ -38,18 +38,7 @@ class ProductRecommender:
         )
 
     def recommend_products(self, query: str, collection_name: str, limit: int = 10):
-        """
-        Recommend products based on a query using the specified collection.
 
-        Args:
-            query (str): The search query.
-            collection_name (str): The name of the collection to search.
-            limit (int): The number of top products to return.
-
-        Returns:
-            List[str]: A list of reranked product names.
-        """
-        # Get the top-K results based on embeddings
         query_vector = self.embedding_model.embed_query(query)
         points = self.client.search(
             collection_name=collection_name,
@@ -57,7 +46,6 @@ class ProductRecommender:
             limit=limit
         )
 
-        # Extract product details
         products = [
             (point.payload["name"], point.payload["specs"], point.payload["price"])
             for point in points
@@ -68,7 +56,6 @@ class ProductRecommender:
         for idx, (name, specs, price) in enumerate(products, start=1):
             print(f"{idx}. Name: {name}\n   Specs: {specs}    \nPrice: {price}")
 
-        # Prepare the rerank prompt
         product_texts = "\n".join(
             [f"{i + 1}. Name: {name}\n   Specs: {specs}    \nPrice: {price}" for i, (name, specs, price) in enumerate(products)])
         rerank_prompt = (
@@ -77,11 +64,9 @@ class ProductRecommender:
             f"Please return the list in the order of relevance, starting with the most relevant product."
         )
 
-        # Get reranked products
         response = self.chat_model.invoke(rerank_prompt)
         reranked_products = response.content.splitlines()
 
-        # Print reranked products
         print("\nReranked Products:")
         for idx, product in enumerate(reranked_products, start=1):
             print(f" {product}")
@@ -91,5 +76,5 @@ class ProductRecommender:
 
 if __name__ == "__main__":
     recommender = ProductRecommender()
-    query = "сакам да го купам најевтиниот самсунг телевизор 55\""
-    recommended_products = recommender.recommend_products(query, "neptun-products")
+    # query = "сакам да го купам најевтиниот самсунг телевизор 55\""
+    # recommended_products = recommender.recommend_products(query, "neptun-products")
