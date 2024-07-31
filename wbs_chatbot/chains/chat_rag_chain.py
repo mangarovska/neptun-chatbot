@@ -20,7 +20,7 @@ class ProductRecommender:
             raise ValueError("OpenAI API key not found. Please set it in the .env file.")
 
     def _initialize_models(self):
-        self.chat_model = ChatOpenAI(model="gpt-4o", openai_api_key=self.openai_api_key)
+        self.chat_model = ChatOpenAI(model="gpt-4o-mini", temperature="0", openai_api_key=self.openai_api_key)
         self.embedding_model = OpenAIEmbeddings(api_key=self.openai_api_key, model="text-embedding-3-small")
 
     def recommend_products(self, query: str, collection_name: str, limit: int = 5):
@@ -30,12 +30,28 @@ class ProductRecommender:
             query_vector=query_vector,
             limit=limit,
         )
-        return [point.payload["name"] for point in points]
+
+        return self.format_results(points)
+        # return [point.payload["name"] for point in points]
+
+    @staticmethod
+    def format_results(search_results):
+        formatted_results = [
+            {
+                "name": result.payload['name'],
+                "category": result.payload['category'],
+                "price": result.payload['price'],
+                "score": result.score
+            }
+            for result in search_results
+        ]
+        names = [result.payload['name'] for result in search_results]
+        return names
 
 
 if __name__ == "__main__":
     recommender = ProductRecommender()
-    # query = "Сакам 27 инчен монитор за гејмање и да е Самсунг."
+    # query = "Сакам електрично ѓезве"
     # recommended_products = recommender.recommend_products(query, "neptun-products")
     # for product in recommended_products:
     #     print(product)
