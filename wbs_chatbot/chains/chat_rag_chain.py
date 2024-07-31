@@ -15,18 +15,12 @@ class ProductRecommender:
         self.client = QdrantClient(url="http://localhost:6333")
 
     def _load_api_keys(self):
-        """
-        Load API keys from the .env file and set them as class attributes.
-        """
         load_dotenv()
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
         if not self.openai_api_key:
             raise ValueError("OpenAI API key not found. Please set it in the .env file.")
 
     def _initialize_models(self):
-        """
-        Initialize the models required for embeddings and chat.
-        """
         self.chat_model = ChatOpenAI(
             model="gpt-4o-mini",
             temperature="0",
