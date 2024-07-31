@@ -9,6 +9,7 @@ from langchain.globals import set_verbose
 
 set_verbose(False)
 
+
 class ProductRecommender:
     def __init__(self):
         self._load_api_keys()
@@ -38,21 +39,18 @@ class ProductRecommender:
         for idx, product in enumerate(products, start=1):
             print(f"{idx}. {product}")
 
-
-        product_texts = "\n".join([f"{i+1}. {product}" for i, product in enumerate(products)])
+        product_texts = "\n".join([f"{i + 1}. {product}" for i, product in enumerate(products)])
         rerank_prompt = f"Given the query: \"{query}\", rerank the following products by relevance:\n\n{product_texts}\n\nPlease return the list in the order of relevance, starting with the most relevant product."
-
 
         response = self.chat_model.invoke(rerank_prompt)
 
-
         reranked_products = response.content.splitlines()
-
 
         print("\nReranked Products:")
         for idx, product in enumerate(reranked_products, start=1):
             print(f"{idx}. {product}")
         return reranked_products
+
 
 if __name__ == "__main__":
     recommender = ProductRecommender()
