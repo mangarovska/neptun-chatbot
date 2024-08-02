@@ -1,4 +1,5 @@
 import os
+import re
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from qdrant_client import QdrantClient
@@ -60,10 +61,11 @@ class ProductRecommender:
         )
 
         response = self.chat_model.invoke(rerank_prompt)
-        reranked_products = response.content.splitlines()
+        reranked_products = response.content.strip().splitlines()
+        clean_reranked_products = [re.sub(r'\*\*', '', product) for product in reranked_products]
 
         print("\nReranked Products:")
-        for idx, product in enumerate(reranked_products, start=1):
+        for idx, product in enumerate(clean_reranked_products, start=1):
             print(f" {product}")
 
         return reranked_products
@@ -71,5 +73,5 @@ class ProductRecommender:
 
 if __name__ == "__main__":
     recommender = ProductRecommender()
-    # query = "сакам да го купам најевтиниот самсунг телевизор 55\""
-    # recommended_products = recommender.recommend_products(query, "neptun-products")
+    query = "сакам да го купам најевтиниот самсунг телевизор 55\""
+    recommended_products = recommender.recommend_products(query, "neptun-products")
