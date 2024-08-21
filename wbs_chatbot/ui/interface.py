@@ -1,5 +1,6 @@
 import streamlit as st
 from wbs_chatbot.chains.chat_rag_chain import ProductRecommender
+import re
 
 
 def main():
@@ -67,7 +68,8 @@ def main():
         # get recommended products
         try:
             recommended_products = recommender.recommend_products(prompt, "neptun-products")
-            formatted_response = "<br>".join(recommended_products) if recommended_products else "No products found."
+            clean_recommended_products = [re.sub(r'\*\*', '', product) for product in recommended_products]
+            formatted_response = "<br>".join(clean_recommended_products) if clean_recommended_products else "No products found."
         except Exception as e:
             formatted_response = f"An error occurred: {e}"
 
