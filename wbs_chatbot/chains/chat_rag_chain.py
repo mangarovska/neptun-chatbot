@@ -4,12 +4,14 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from qdrant_client import QdrantClient
 from langchain.globals import set_verbose
+from wbs_chatbot.chains.QueryHistory import QueryHistory
 
 set_verbose(False)
 
 
 class ProductRecommender:
     def __init__(self):
+        self.query_history = QueryHistory()
         self._load_api_keys()
         self._initialize_models()
         self.client = QdrantClient(url="http://localhost:6333")
@@ -31,23 +33,43 @@ class ProductRecommender:
             model="text-embedding-3-small"
         )
 
-    def is_query_relevant(self, query: str, collection_name: str, relevance_threshold: float = 0.3) -> bool:
-        query_vector = self.embedding_model.embed_query(query)
+    # def is_query_relevant(self, query: str, collection_name: str, relevance_threshold: float = 0.2) -> bool:
+    #     query_vector = self.embedding_model.embed_query(query)
+    #
+    #     # perform a quick search with a high limit to check relevance
+    #     points = self.client.search(
+    #         collection_name=collection_name,
+    #         query_vector=query_vector,
+    #         limit=1  # one point to check the most relevant product
+    #     )
+    #
+    #     # If there are no results or the relevance score is too low, mark as irrelevant
+    #     if not points or points[0].score < relevance_threshold:
+    #         return False
+    #
+    #     return True
 
-        # perform a quick search with a high limit to check relevance
-        points = self.client.search(
-            collection_name=collection_name,
-            query_vector=query_vector,
-            limit=1  # one point to check the most relevant product
+    def is_query_relevant(self, query: str, collection_name: str) -> bool:
+        # previous queries for context
+        previous_queries = self.query_history.get_previous_queries(query)
+        context = "\n".join([f"Previous query: {q['query']}\nResponse: {q['response']}" for q in previous_queries])
+
+        relevance_prompt = (
+            f"Given the query: \"{query}\" and the following context:\n{context}\n\n"
+            f"Assess whether this query is relevant for the collection '{collection_name}'.\n"
+            f"Return 'True' if the query is relevant based on the context and current collection; otherwise, return 'False'."
         )
 
-        # If there are no results or the relevance score is too low, mark as irrelevant
-        if not points or points[0].score < relevance_threshold:
-            return False
+        response = self.chat_model.invoke(relevance_prompt)
+        is_relevant = response.content.strip().lower() == 'true'
 
-        return True
+        return is_relevant
 
     def recommend_products(self, query: str, collection_name: str, limit: int = 5):
+
+        # Retrieve previous queries for context
+        previous_queries = self.query_history.get_previous_queries(query)
+        context = "\n".join([f"Previous query: {q['query']}\nResponse: {q['response']}" for q in previous_queries])
 
         # check if the query is relevant before proceeding
         if not self.is_query_relevant(query, collection_name):
@@ -111,6 +133,7 @@ class ProductRecommender:
 
         response = self.chat_model.invoke(rerank_prompt)
         reranked_products = response.content.strip().splitlines()
+        self.query_history.save_query(query, reranked_products)
         clean_reranked_products = [re.sub(r'\*\*', '', product) for product in reranked_products]
 
         print("\nReranked Products:")
