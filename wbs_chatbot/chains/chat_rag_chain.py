@@ -5,7 +5,6 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from qdrant_client import QdrantClient
 from langchain.globals import set_verbose
 
-# Disable verbose mode for cleaner output
 set_verbose(False)
 
 
@@ -32,7 +31,28 @@ class ProductRecommender:
             model="text-embedding-3-small"
         )
 
-    def recommend_products(self, query: str, collection_name: str, limit: int = 10):
+    def is_query_relevant(self, query: str, collection_name: str, relevance_threshold: float = 0.3) -> bool:
+        query_vector = self.embedding_model.embed_query(query)
+
+        # perform a quick search with a high limit to check relevance
+        points = self.client.search(
+            collection_name=collection_name,
+            query_vector=query_vector,
+            limit=1  # one point to check the most relevant product
+        )
+
+        # If there are no results or the relevance score is too low, mark as irrelevant
+        if not points or points[0].score < relevance_threshold:
+            return False
+
+        return True
+
+    def recommend_products(self, query: str, collection_name: str, limit: int = 5):
+
+        # check if the query is relevant before proceeding
+        if not self.is_query_relevant(query, collection_name):
+            return [
+                "Не можам да го одговорам тоа прашање. Прашајте нешто друго за нашите продукти."]
 
         query_vector = self.embedding_model.embed_query(query)
         points = self.client.search(
@@ -68,10 +88,10 @@ class ProductRecommender:
         for idx, product in enumerate(clean_reranked_products, start=1):
             print(f" {product}")
 
-        return reranked_products
+        return clean_reranked_products
 
 
 if __name__ == "__main__":
     recommender = ProductRecommender()
-    query = "сакам да го купам најевтиниот самсунг телевизор 55\""
-    recommended_products = recommender.recommend_products(query, "neptun-products")
+    # query = "сакам да го купам најевтиниот самсунг телевизор 55\""
+    # recommended_products = recommender.recommend_products(query, "neptun-products")
