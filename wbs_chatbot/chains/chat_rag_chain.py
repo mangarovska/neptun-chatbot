@@ -55,10 +55,39 @@ class ProductRecommender:
              enumerate(products)])
 
         rerank_prompt = (
-            f"Given the query: \"{query}\", rerank the following products by relevance:\n\n"
+            f"Given the query: \"{query}\", please rerank the following products by their relevance:\n\n"
             f"{product_texts}\n\n"
-            f"Please return the list in the order of relevance, starting with the most relevant product."
+            f"Start with the most relevant product. First, verify if the most relevant product meets the customer's specific request. "
+            f"If the customer asks for a particular brand or specific requirements that are unavailable, respond with 'За жал немаме такви продукти' "
+            f"(Unfortunately, we do not have such products). Kindly offer to recommend similar alternatives by saying, 'Можеме да ви понудиме слични продукти. "
+            f"Дали би сакале да погледнете?' (We can suggest similar products. Would you like to see them?). "
+            f"If suitable products are available, respond with 'Слични продукти кои ги препорачуваме' (We recommend these similar products). "
+            f"In cases where only one product fully meets the criteria, say 'Ова одговара на вашите барања' (This meets your requirements) "
+            f"and then suggest additional similar products with 'Слични продукти кои може да ви се допаѓаат' (Other similar products you may like). "
+            f"If none of the products fulfill the request, conclude with 'Немаме такви продукти' (No such products available). "
+            f"Please return the products in order of relevance, starting with the most relevant and only in Macedonian langauge."
         )
+
+        #
+        # rerank_prompt = (
+        #     f"Given the query: \"{query}\", rerank the following products by relevance:\n\n"
+        #     f"{product_texts}\n\n"
+        #     f"Return products in the order of relevance, starting with the most relevant product.First check if most "
+        #     f"relevant product is actually what the customer asked for,for example if they ask for a brand or "
+        #     f"specifications that are not available, say that there are no such products or in macedonian За жал "
+        #     f"немаме такви продукти. But if the most relevant ones are adequate say we can recommend these products - "
+        #     f"Слични продукти кои ги препорачуваме. If there is only one relevant answer firslty say this is "
+        #     f"adeqatue for your requirements - Ова одговара на вашите барања, and then reccomend othersimilar ones "
+        #     f"that they may also like -Слични продукти кои може да ви се допаѓаат. If nothing fulfills the "
+        #     f"requirements say that there are no such products, Немаме такви подукти."
+        #     f"Please return  products in the order of relevance, starting with the most relevant product. If "
+        #     # f"there is only one relevant product , return that one at first and say this is what "
+        #     # f"you can find or in Macedonian Овој продукт одговара на вашите барања. But in another paragraph give "
+        #     # f"other 2 or 3 recommendations that are next in the relevancy list, and say Исто така може да ви се допаѓа"
+        #     # f"If there are not any products that fulfill the requirements but there are similar ones state that there "
+        #     # f"are no exact products but here is something similar in Macedonian language.o
+        #
+        # )
 
         response = self.chat_model.invoke(rerank_prompt)
         reranked_products = response.content.strip().splitlines()
@@ -73,5 +102,5 @@ class ProductRecommender:
 
 if __name__ == "__main__":
     recommender = ProductRecommender()
-    query = "сакам да го купам најевтиниот самсунг телевизор 55\""
-    recommended_products = recommender.recommend_products(query, "neptun-products")
+    # query = "сакам да го купам најевтиниот самсунг телевизор 55\""
+    # recommended_products = recommender.recommend_products(query, "neptun-products")
