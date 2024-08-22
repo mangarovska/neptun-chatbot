@@ -33,37 +33,38 @@ class ProductRecommender:
             model="text-embedding-3-small"
         )
 
-    # def is_query_relevant(self, query: str, collection_name: str, relevance_threshold: float = 0.2) -> bool:
-    #     query_vector = self.embedding_model.embed_query(query)
-    #
-    #     # perform a quick search with a high limit to check relevance
-    #     points = self.client.search(
-    #         collection_name=collection_name,
-    #         query_vector=query_vector,
-    #         limit=1  # one point to check the most relevant product
-    #     )
-    #
-    #     # If there are no results or the relevance score is too low, mark as irrelevant
-    #     if not points or points[0].score < relevance_threshold:
-    #         return False
-    #
-    #     return True
+    def is_query_relevant(self, query: str, collection_name: str, relevance_threshold: float = 0.2) -> bool:
+        # the embedding vector for the query
+        query_vector = self.embedding_model.embed_query(query)
 
-    def is_query_relevant(self, query: str, collection_name: str) -> bool:
-        # previous queries for context
-        previous_queries = self.query_history.get_previous_queries(query)
-        context = "\n".join([f"Previous query: {q['query']}\nResponse: {q['response']}" for q in previous_queries])
-
-        relevance_prompt = (
-            f"Given the query: \"{query}\" and the following context:\n{context}\n\n"
-            f"Assess whether this query is relevant for the collection '{collection_name}'.\n"
-            f"Return 'True' if the query is relevant based on the context and current collection; otherwise, return 'False'."
+        # perform a search to find the most relevant product
+        points = self.client.search(
+            collection_name=collection_name,
+            query_vector=query_vector,
+            limit=1  # check the most relevant product
         )
 
-        response = self.chat_model.invoke(relevance_prompt)
-        is_relevant = response.content.strip().lower() == 'true'
+        # If there are no results or the relevance score is too low, mark as irrelevant
+        if not points or points[0].score < relevance_threshold:
+            return False
 
-        return is_relevant
+        return True
+
+    # def is_query_relevant(self, query: str, collection_name: str) -> bool:
+    #     # previous queries for context
+    #     previous_queries = self.query_history.get_previous_queries(query)
+    #     context = "\n".join([f"Previous query: {q['query']}\nResponse: {q['response']}" for q in previous_queries])
+    #
+    #     relevance_prompt = (
+    #         f"Given the query: \"{query}\" and the following context:\n{context}\n\n"
+    #         f"Assess whether this query is relevant for the collection '{collection_name}'.\n"
+    #         f"Return 'True' if the query is relevant based on the context and current collection; otherwise, return 'False'."
+    #     )
+    #
+    #     response = self.chat_model.invoke(relevance_prompt)
+    #     is_relevant = response.content.strip().lower() == 'true'
+    #
+    #     return is_relevant
 
     def recommend_products(self, query: str, collection_name: str, limit: int = 5):
 
@@ -96,21 +97,34 @@ class ProductRecommender:
             [f"{i + 1}. Name: {name}\n   Specs: {specs}\n   Price: {price}" for i, (name, specs, price) in
              enumerate(products)])
 
+        # rerank_prompt = (
+        #     f"Given the query: \"{query}\", please rerank the following products by their relevance to the customer's needs:\n\n"
+        #     f"{product_texts}\n\n"
+        #     f"Start with the most relevant product. First, verify if the most relevant product meets the customer's specific request. "
+        #     f"If the customer asks for a particular brand or specific requirements that are unavailable, respond with 'За жал немаме такви продукти' "
+        #     f"(Unfortunately, we do not have such products). Kindly offer to recommend similar alternatives by saying, 'Можеме да ви понудиме слични продукти. "
+        #     f"Дали би сакале да погледнете?' (We can suggest similar products. Would you like to see them?). "
+        #     f"If suitable products are available, respond with 'Слични продукти кои ги препорачуваме' (We recommend these similar products). "
+        #     f"In cases where only one product fully meets the criteria, say 'Ова одговара на вашите барања' (This meets your requirements) "
+        #     f"and then suggest additional similar products with 'Слични продукти кои може да ви се допаѓаат' (Other similar products you may like). "
+        #     f"If none of the products fulfill the request, conclude with 'Немаме такви продукти' (No such products available). "
+        #     f"Please return the products in order of relevance, starting with the most relevant and only in Macedonian langauge."
+        # )
+
         rerank_prompt = (
-            f"Given the query: \"{query}\", please rerank the following products by their relevance:\n\n"
+            f"Given the query: \"{query}\", please rerank the following products by their relevance to the customer's needs:\n\n"
             f"{product_texts}\n\n"
-            f"Start with the most relevant product. First, verify if the most relevant product meets the customer's specific request. "
-            f"If the customer asks for a particular brand or specific requirements that are unavailable, respond with 'За жал немаме такви продукти' "
-            f"(Unfortunately, we do not have such products). Kindly offer to recommend similar alternatives by saying, 'Можеме да ви понудиме слични продукти. "
-            f"Дали би сакале да погледнете?' (We can suggest similar products. Would you like to see them?). "
-            f"If suitable products are available, respond with 'Слични продукти кои ги препорачуваме' (We recommend these similar products). "
-            f"In cases where only one product fully meets the criteria, say 'Ова одговара на вашите барања' (This meets your requirements) "
-            f"and then suggest additional similar products with 'Слични продукти кои може да ви се допаѓаат' (Other similar products you may like). "
+            f"Instructions:"
+            f"1. Relevance check: First, verify if the most relevant product meets the customer's specific request. "
+            f"For instance, if the customer is asking for a particular brand or specific feature that is not available, reply with 'За жал немаме такви продукти' "
+            f"(Unfortunately, we do not have such products)."
+            f"2. Specific Recommendations: If suitable products are available, respond with 'Слични продукти кои ги препорачуваме се следниве: ' (We recommend these similar products: ). "
+            f"If only one product meets the criteria, say 'Ова одговара на вашите барања' (This meets your requirements) and than suggest additional similar products with 'Слични продукти кои може да ви се допаѓаат' (Other similar products you may like). "
             f"If none of the products fulfill the request, conclude with 'Немаме такви продукти' (No such products available). "
-            f"Please return the products in order of relevance, starting with the most relevant and only in Macedonian langauge."
+            f"3. Output Format: Return the products in order of relevance, starting with the most relevant. Provide responses only in Macedonian. "
+            f"Please ensure the final response is concise and adheres to these guidelines."
         )
 
-        #
         # rerank_prompt = (
         #     f"Given the query: \"{query}\", rerank the following products by relevance:\n\n"
         #     f"{product_texts}\n\n"
