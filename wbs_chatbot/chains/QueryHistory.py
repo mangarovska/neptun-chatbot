@@ -30,7 +30,6 @@ class QueryHistory:
         matching_queries = [entry for entry in self.history if user_query.lower() in entry['query'].lower()]
 
         if analyze_with_ai and self.chat_model:
-            # Create a prompt to analyze matching queries
             prompt = (
                     f"Analyze the following past queries and their responses for trends and relevant context:\n\n" +
                     "\n".join(

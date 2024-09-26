@@ -4,7 +4,7 @@ import spacy
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from qdrant_client import QdrantClient
-from wbs_chatbot.chains.QueryHistory import QueryHistory  # Assuming this is your custom QueryHistory module
+from wbs_chatbot.chains.QueryHistory import QueryHistory
 from langchain.globals import set_verbose
 
 set_verbose(False)
@@ -75,6 +75,10 @@ class ProductRecommender:
                 brand = ent.text.capitalize()
                 break
 
+        # brand_match = re.search(r"(samsung|sony|lg|philips|razer)", query, re.IGNORECASE)
+        # if brand_match:
+        #     brand = brand_match.group(0).capitalize()
+
         size_match = re.search(r"(\d{2,3}) инчи", query, re.IGNORECASE)
         if size_match:
             size = size_match.group(0)
@@ -83,11 +87,7 @@ class ProductRecommender:
 
     def recommend_products(self, query: str, collection_name: str, limit: int = 5):
 
-        if not self.is_query_relevant(query, collection_name):
-            return ["Не можам да го одговорам тоа прашање. Прашајте нешто друго за нашите продукти."]
-
         constraints = self.extract_constraints(query)
-
         previous_queries = self.query_history.get_previous_queries(query, analyze_with_ai=True)
 
         if isinstance(previous_queries, str):
@@ -101,6 +101,9 @@ class ProductRecommender:
             context_prompt += f"- Brand: {constraints['brand']}\n"
         if constraints["size"]:
             context_prompt += f"- Size: {constraints['size']}\n"
+
+        if not self.is_query_relevant(query, collection_name):
+            return ["Не можам да го одговорам тоа прашање. Прашајте нешто друго за нашите продукти."]
 
         query_vector = self.embedding_model.embed_query(query)
 
