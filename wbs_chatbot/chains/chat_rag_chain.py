@@ -1,20 +1,22 @@
 import os
 import re
+import spacy
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from qdrant_client import QdrantClient
+from wbs_chatbot.chains.QueryHistory import QueryHistory  # Assuming this is your custom QueryHistory module
 from langchain.globals import set_verbose
-from wbs_chatbot.chains.QueryHistory import QueryHistory
 
 set_verbose(False)
 
 
 class ProductRecommender:
     def __init__(self):
-        self.query_history = QueryHistory()
+        self.nlp = spacy.load("en_core_web_sm")
         self._load_api_keys()
         self._initialize_models()
         self.client = QdrantClient(url="http://localhost:6333")
+        self.query_history = QueryHistory(chat_model=self.chat_model)
 
     def _load_api_keys(self):
         load_dotenv()
@@ -33,51 +35,75 @@ class ProductRecommender:
             model="text-embedding-3-small"
         )
 
-    def is_query_relevant(self, query: str, collection_name: str, relevance_threshold: float = 0.2) -> bool:
-        # the embedding vector for the query
-        query_vector = self.embedding_model.embed_query(query)
+    def classify_intent(self, query: str) -> str:
+        prompt = f"Classify the following query as either 'product_related' or 'conversational':\n\nQuery: \"{query}\""
 
-        # perform a search to find the most relevant product
+        response = self.chat_model.invoke(prompt)
+        intent = response.content.strip().lower()
+
+        if 'product_related' in intent:
+            return "product_related"
+        else:
+            return "conversational"
+
+    def is_query_relevant(self, query: str, collection_name: str, relevance_threshold: float = 0.2) -> bool:
+        intent = self.classify_intent(query)
+        if intent != "product_related":
+            return False
+
+        # if the intent is product-related
+        query_vector = self.embedding_model.embed_query(query)
         points = self.client.search(
             collection_name=collection_name,
             query_vector=query_vector,
             limit=1  # check the most relevant product
         )
 
-        # If there are no results or the relevance score is too low, mark as irrelevant
+        # no results or relevance score is low
         if not points or points[0].score < relevance_threshold:
             return False
 
         return True
 
-    # def is_query_relevant(self, query: str, collection_name: str) -> bool:
-    #     # previous queries for context
-    #     previous_queries = self.query_history.get_previous_queries(query)
-    #     context = "\n".join([f"Previous query: {q['query']}\nResponse: {q['response']}" for q in previous_queries])
-    #
-    #     relevance_prompt = (
-    #         f"Given the query: \"{query}\" and the following context:\n{context}\n\n"
-    #         f"Assess whether this query is relevant for the collection '{collection_name}'.\n"
-    #         f"Return 'True' if the query is relevant based on the context and current collection; otherwise, return 'False'."
-    #     )
-    #
-    #     response = self.chat_model.invoke(relevance_prompt)
-    #     is_relevant = response.content.strip().lower() == 'true'
-    #
-    #     return is_relevant
+    def extract_constraints(self, query):
+        brand = None
+        size = None
+
+        doc = self.nlp(query)
+        for ent in doc.ents:
+            if ent.label_ == "ORG":  # 'ORG' label in spaCy
+                brand = ent.text.capitalize()
+                break
+
+        size_match = re.search(r"(\d{2,3}) инчи", query, re.IGNORECASE)
+        if size_match:
+            size = size_match.group(0)
+
+        return {"brand": brand, "size": size}
 
     def recommend_products(self, query: str, collection_name: str, limit: int = 5):
 
-        # Retrieve previous queries for context
-        previous_queries = self.query_history.get_previous_queries(query)
-        context = "\n".join([f"Previous query: {q['query']}\nResponse: {q['response']}" for q in previous_queries])
-
-        # check if the query is relevant before proceeding
         if not self.is_query_relevant(query, collection_name):
-            return [
-                "Не можам да го одговорам тоа прашање. Прашајте нешто друго за нашите продукти."]
+            return ["Не можам да го одговорам тоа прашање. Прашајте нешто друго за нашите продукти."]
+
+        constraints = self.extract_constraints(query)
+
+        previous_queries = self.query_history.get_previous_queries(query, analyze_with_ai=True)
+
+        if isinstance(previous_queries, str):
+            context_prompt = f"The customer previously asked:\n{previous_queries}\n\n"
+        else:
+            context_prompt = "\n".join(
+                [f"Previous query: {q['query']}\nResponse: {q['response']}" for q in previous_queries])
+
+        context_prompt += f"The customer is looking for products matching the following criteria:\n"
+        if constraints["brand"]:
+            context_prompt += f"- Brand: {constraints['brand']}\n"
+        if constraints["size"]:
+            context_prompt += f"- Size: {constraints['size']}\n"
 
         query_vector = self.embedding_model.embed_query(query)
+
         points = self.client.search(
             collection_name=collection_name,
             query_vector=query_vector,
@@ -93,61 +119,32 @@ class ProductRecommender:
         for idx, (name, specs, price) in enumerate(products, start=1):
             print(f"{idx}. Name: {name}\n   Specs: {specs}\n   Price: {price}")
 
+        # Format the products for reranking by the language model
         product_texts = "\n".join(
             [f"{i + 1}. Name: {name}\n   Specs: {specs}\n   Price: {price}" for i, (name, specs, price) in
-             enumerate(products)])
-
-        # rerank_prompt = (
-        #     f"Given the query: \"{query}\", please rerank the following products by their relevance to the customer's needs:\n\n"
-        #     f"{product_texts}\n\n"
-        #     f"Start with the most relevant product. First, verify if the most relevant product meets the customer's specific request. "
-        #     f"If the customer asks for a particular brand or specific requirements that are unavailable, respond with 'За жал немаме такви продукти' "
-        #     f"(Unfortunately, we do not have such products). Kindly offer to recommend similar alternatives by saying, 'Можеме да ви понудиме слични продукти. "
-        #     f"Дали би сакале да погледнете?' (We can suggest similar products. Would you like to see them?). "
-        #     f"If suitable products are available, respond with 'Слични продукти кои ги препорачуваме' (We recommend these similar products). "
-        #     f"In cases where only one product fully meets the criteria, say 'Ова одговара на вашите барања' (This meets your requirements) "
-        #     f"and then suggest additional similar products with 'Слични продукти кои може да ви се допаѓаат' (Other similar products you may like). "
-        #     f"If none of the products fulfill the request, conclude with 'Немаме такви продукти' (No such products available). "
-        #     f"Please return the products in order of relevance, starting with the most relevant and only in Macedonian langauge."
-        # )
-
-        rerank_prompt = (
-            f"Given the query: \"{query}\", please rerank the following products by their relevance to the customer's needs:\n\n"
-            f"{product_texts}\n\n"
-            f"Instructions:"
-            f"1. Relevance check: First, verify if the most relevant product meets the customer's specific request. "
-            f"For instance, if the customer is asking for a particular brand or specific feature that is not available, reply with 'За жал немаме такви продукти' "
-            f"(Unfortunately, we do not have such products)."
-            f"2. Specific Recommendations: If suitable products are available, respond with 'Слични продукти кои ги препорачуваме се следниве: ' (We recommend these similar products: ). "
-            f"If only one product meets the criteria, say 'Ова одговара на вашите барања' (This meets your requirements) and than suggest additional similar products with 'Слични продукти кои може да ви се допаѓаат' (Other similar products you may like). "
-            f"If none of the products fulfill the request, conclude with 'Немаме такви продукти' (No such products available). "
-            f"3. Output Format: Return the products in order of relevance, starting with the most relevant. Provide responses only in Macedonian. "
-            f"Please ensure the final response is concise and adheres to these guidelines."
+             enumerate(products)]
         )
 
-        # rerank_prompt = (
-        #     f"Given the query: \"{query}\", rerank the following products by relevance:\n\n"
-        #     f"{product_texts}\n\n"
-        #     f"Return products in the order of relevance, starting with the most relevant product.First check if most "
-        #     f"relevant product is actually what the customer asked for,for example if they ask for a brand or "
-        #     f"specifications that are not available, say that there are no such products or in macedonian За жал "
-        #     f"немаме такви продукти. But if the most relevant ones are adequate say we can recommend these products - "
-        #     f"Слични продукти кои ги препорачуваме. If there is only one relevant answer firslty say this is "
-        #     f"adeqatue for your requirements - Ова одговара на вашите барања, and then reccomend othersimilar ones "
-        #     f"that they may also like -Слични продукти кои може да ви се допаѓаат. If nothing fulfills the "
-        #     f"requirements say that there are no such products, Немаме такви подукти."
-        #     f"Please return  products in the order of relevance, starting with the most relevant product. If "
-        #     # f"there is only one relevant product , return that one at first and say this is what "
-        #     # f"you can find or in Macedonian Овој продукт одговара на вашите барања. But in another paragraph give "
-        #     # f"other 2 or 3 recommendations that are next in the relevancy list, and say Исто така може да ви се допаѓа"
-        #     # f"If there are not any products that fulfill the requirements but there are similar ones state that there "
-        #     # f"are no exact products but here is something similar in Macedonian language.o
-        #
-        # )
+        rerank_prompt = (
+                context_prompt +
+                f"Given the query: \"{query}\", please rerank the following products by their relevance to the customer's needs:\n\n"
+                f"{product_texts}\n\n"
+                f"Instructions:"
+                f"1. Relevance check: First, verify if the most relevant product meets the customer's specific request. "
+                f"For instance, if the customer is asking for a particular brand or specific feature that is not available, reply with 'За жал немаме такви продукти' "
+                f"(Unfortunately, we do not have such products)."
+                f"2. Specific Recommendations: If suitable products are available, respond with 'Слични продукти кои ги препорачуваме се следниве: ' (We recommend these similar products: ). "
+                f"If only one product meets the criteria, say 'Ова одговара на вашите барања' (This meets your requirements) and suggest additional similar products with 'Слични продукти кои може да ви се допаѓаат' (Other similar products you may like). "
+                f"If none of the products fulfill the request, conclude with 'Немаме такви продукти' (No such products available). "
+                f"3. Output Format: Return the products in order of relevance, starting with the most relevant. Provide responses only in Macedonian. "
+                f"Please ensure the final response is concise and adheres to these guidelines."
+        )
 
         response = self.chat_model.invoke(rerank_prompt)
         reranked_products = response.content.strip().splitlines()
+
         self.query_history.save_query(query, reranked_products)
+
         clean_reranked_products = [re.sub(r'\*\*', '', product) for product in reranked_products]
 
         print("\nReranked Products:")
