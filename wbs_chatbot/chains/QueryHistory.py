@@ -35,7 +35,6 @@ class QueryHistory:
                     "\n".join(
                         [f"Query: {entry['query']}\nResponse: {entry['response']}\n" for entry in matching_queries])
             )
-
             response = self.chat_model.invoke(prompt)
             return response.content.strip()
 

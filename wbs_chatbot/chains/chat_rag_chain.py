@@ -12,11 +12,11 @@ set_verbose(False)
 
 class ProductRecommender:
     def __init__(self):
-        self.nlp = spacy.load("en_core_web_sm")
         self._load_api_keys()
         self._initialize_models()
         self.client = QdrantClient(url="http://localhost:6333")
         self.query_history = QueryHistory(chat_model=self.chat_model)
+        self.nlp = spacy.load("en_core_web_sm")
 
     def _load_api_keys(self):
         load_dotenv()
@@ -59,36 +59,40 @@ class ProductRecommender:
             limit=1  # check the most relevant product
         )
 
-        # no results or relevance score is low
         if not points or points[0].score < relevance_threshold:
             return False
 
         return True
 
-    def extract_constraints(self, query):
+    @staticmethod
+    def extract_constraints(query):
         brand = None
         size = None
 
-        doc = self.nlp(query)
-        for ent in doc.ents:
-            if ent.label_ == "ORG":  # 'ORG' label in spaCy
-                brand = ent.text.capitalize()
-                break
+        # doc = self.nlp(query)
+        # for ent in doc.ents:
+        #     if ent.label_ == "ORG":  # 'ORG' label is used for companies/brands
+        #         brand = ent.text.capitalize()
+        #         break
 
-        # brand_match = re.search(r"(samsung|sony|lg|philips|razer)", query, re.IGNORECASE)
-        # if brand_match:
-        #     brand = brand_match.group(0).capitalize()
+        brand_match = re.search(r"(samsung|sony|lg|philips|razer|beko|fuego)", query, re.IGNORECASE)
+        if brand_match:
+            brand = brand_match.group(0).capitalize()
 
-        size_match = re.search(r"(\d{2,3}) инчи", query, re.IGNORECASE)
+        size_match = re.search(r"(\d{2,3})[-\s] инчи", query, re.IGNORECASE)
         if size_match:
-            size = size_match.group(0)
+            size = size_match.group(1)
 
         return {"brand": brand, "size": size}
 
     def recommend_products(self, query: str, collection_name: str, limit: int = 5):
 
+        if not self.is_query_relevant(query, collection_name):
+            return ["Не можам да го одговорам тоа прашање. Прашајте нешто друго за нашите продукти."]
+
         constraints = self.extract_constraints(query)
-        previous_queries = self.query_history.get_previous_queries(query, analyze_with_ai=True)
+        previous_queries = self.query_history.get_previous_queries(query,
+                                                                   analyze_with_ai=True)  # True/False based on use case
 
         if isinstance(previous_queries, str):
             context_prompt = f"The customer previously asked:\n{previous_queries}\n\n"
@@ -102,9 +106,6 @@ class ProductRecommender:
         if constraints["size"]:
             context_prompt += f"- Size: {constraints['size']}\n"
 
-        if not self.is_query_relevant(query, collection_name):
-            return ["Не можам да го одговорам тоа прашање. Прашајте нешто друго за нашите продукти."]
-
         query_vector = self.embedding_model.embed_query(query)
 
         points = self.client.search(
@@ -114,15 +115,10 @@ class ProductRecommender:
         )
 
         products = [
-            (point.payload["name"], point.payload["specs"], point.payload["price"])
+            (point.payload.get("name"), point.payload.get("specs"), point.payload.get("price"))
             for point in points
         ]
 
-        print("\nInitial Recommended Products:")
-        for idx, (name, specs, price) in enumerate(products, start=1):
-            print(f"{idx}. Name: {name}\n   Specs: {specs}\n   Price: {price}")
-
-        # Format the products for reranking by the language model
         product_texts = "\n".join(
             [f"{i + 1}. Name: {name}\n   Specs: {specs}\n   Price: {price}" for i, (name, specs, price) in
              enumerate(products)]
@@ -130,10 +126,10 @@ class ProductRecommender:
 
         rerank_prompt = (
                 context_prompt +
-                f"Given the query: \"{query}\", please rerank the following products by their relevance to the customer's needs:\n\n"
+                f"Given the query: \"{query}\",please rerank the following products by their relevance to the customer's needs taking into consideration the previously asked questions and answers:\n\n"
                 f"{product_texts}\n\n"
                 f"Instructions:"
-                f"1. Relevance check: First, verify if the most relevant product meets the customer's specific request. "
+                f"1. Relevance check: First, verify if the most relevant product meets the customer's specific request."
                 f"For instance, if the customer is asking for a particular brand or specific feature that is not available, reply with 'За жал немаме такви продукти' "
                 f"(Unfortunately, we do not have such products)."
                 f"2. Specific Recommendations: If suitable products are available, respond with 'Слични продукти кои ги препорачуваме се следниве: ' (We recommend these similar products: ). "
@@ -149,10 +145,6 @@ class ProductRecommender:
         self.query_history.save_query(query, reranked_products)
 
         clean_reranked_products = [re.sub(r'\*\*', '', product) for product in reranked_products]
-
-        print("\nReranked Products:")
-        for idx, product in enumerate(clean_reranked_products, start=1):
-            print(f" {product}")
 
         return clean_reranked_products
 
